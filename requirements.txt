@@ -24,3 +24,6 @@ truststore==0.10.4
 
 # --- Database: external Postgres (Supabase) ---
 psycopg2-binary==2.9.13
+
+# --- Attachments: Supabase Storage (REST API) ---
+requests==2.32.2

@@ -3,7 +3,7 @@ import sys
 # DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, send_from_directory
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 from sqlalchemy.pool import NullPool
@@ -11,7 +11,9 @@ from src.models.user import db
 from src.routes.user import user_bp
 from src.routes.note import note_bp
 from src.routes.translate import translate_bp
+from src.routes.attachment import attachment_bp
 from src.models.note import Note
+from src.models.attachment import Attachment
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -23,6 +25,19 @@ CORS(app)
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(note_bp, url_prefix='/api')
 app.register_blueprint(translate_bp, url_prefix='/api')
+app.register_blueprint(attachment_bp, url_prefix='/api')
+
+# Reject oversized uploads before they are buffered in memory. Kept below
+# Vercel's ~4.5 MB serverless request-body limit so local and deployed
+# behaviour match.
+app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_UPLOAD_MB', '4')) * 1024 * 1024
+
+
+@app.errorhandler(413)
+def request_too_large(_error):
+    return jsonify({
+        'error': f"File is too large. Maximum size is {os.getenv('MAX_UPLOAD_MB', '4')} MB."
+    }), 413
 # --- Configuration ----------------------------------------------------------
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 

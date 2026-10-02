@@ -305,6 +305,124 @@
             font-size: clamp(15px, 0.4vw + 0.8rem, 20px);
         }
 
+        /* --- Attachments feature --- */
+
+        .attachments-section {
+            margin-top: clamp(14px, 1.2vw, 22px);
+            padding-top: clamp(14px, 1.2vw, 22px);
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .attachments-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .attachments-label {
+            font-weight: 600;
+            color: #333;
+            font-size: clamp(14px, 0.3vw + 0.75rem, 18px);
+        }
+
+        .btn-attach {
+            background: #fff;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+
+        .btn-attach:hover {
+            background: #f0f3ff;
+            transform: translateY(-1px);
+        }
+
+        .attachments-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .attachments-empty {
+            color: #999;
+            width: 100%;
+            font-size: clamp(13px, 0.3vw + 0.7rem, 16px);
+        }
+
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            max-width: 100%;
+            padding: 8px 10px;
+            background: #f8f9fa;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+        }
+
+        .attachment-thumb {
+            display: block;
+            flex-shrink: 0;
+            width: clamp(40px, 4vw, 56px);
+            height: clamp(40px, 4vw, 56px);
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        .attachment-icon {
+            flex-shrink: 0;
+            font-size: clamp(22px, 2vw, 30px);
+            line-height: 1;
+        }
+
+        .attachment-meta {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .attachment-name {
+            color: #333;
+            font-weight: 500;
+            text-decoration: none;
+            max-width: 26ch;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: clamp(13px, 0.3vw + 0.7rem, 16px);
+        }
+
+        .attachment-name:hover {
+            color: var(--primary);
+            text-decoration: underline;
+        }
+
+        .attachment-size {
+            color: #999;
+            font-size: clamp(11.5px, 0.2vw + 0.6rem, 14px);
+        }
+
+        .attachment-remove {
+            flex-shrink: 0;
+            width: 26px;
+            height: 26px;
+            border: none;
+            border-radius: 50%;
+            background: #e5e7eb;
+            color: #666;
+            line-height: 1;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .attachment-remove:hover {
+            background: #dc3545;
+            color: #fff;
+        }
+
         .form-group {
             margin-bottom: clamp(14px, 1.2vw, 22px);
         }
@@ -498,6 +616,17 @@
                     </div>
                 </div>
 
+                <!-- 附件区：笔记保存过（有 id）之后才出现，和 Delete 按钮同一个逻辑 -->
+                <div class="attachments-section" id="attachmentsSection" style="display: none;">
+                    <div class="attachments-header">
+                        <span class="attachments-label">📎 Attachments</span>
+                        <button class="btn btn-attach" id="attachBtn">＋ Add file</button>
+                        <input type="file" id="fileInput" hidden multiple
+                               accept="image/*,.pdf,.txt,.md,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip">
+                    </div>
+                    <div class="attachments-list" id="attachmentsList"></div>
+                </div>
+
                 <!-- 译文区：点 Translate 之后才出现，原文保留在正文框里 -->
                 <div class="translation-panel" id="translationPanel" style="display: none;">
                     <div class="translation-header">
@@ -537,6 +666,8 @@
                 document.getElementById('deleteBtn').addEventListener('click', () => this.deleteNote());
                 document.getElementById('translateBtn').addEventListener('click', () => this.translateNote());
                 document.getElementById('applyTranslationBtn').addEventListener('click', () => this.applyTranslation());
+                document.getElementById('attachBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+                document.getElementById('fileInput').addEventListener('change', (e) => this.uploadFiles(e.target.files));
                 document.getElementById('searchBox').addEventListener('input', (e) => this.searchNotes(e.target.value));
                 
                 // Auto-save on content change (debounced)
@@ -631,6 +762,7 @@
                 document.getElementById('editorForm').style.display = 'block';
                 document.getElementById('editorActions').style.display = 'flex';
                 this.updateDeleteButton();
+                this.renderAttachments();
             }
 
             // Delete 按钮只在「已保存过的笔记」(currentNote 有 id) 时才显示
@@ -647,6 +779,7 @@
                 document.getElementById('editorTitle').textContent = 'Select a note to edit';
                 this.hideTranslation();
                 this.currentNote = null;
+                this.renderAttachments();
             }
 
             async saveNote(isAutoSave = false) {
@@ -701,6 +834,7 @@
                     this.renderNotesList();
                     document.getElementById('editorTitle').textContent = savedNote.title;
                     this.updateDeleteButton(); // 保存成功后新笔记才拿到 id，此时 Delete 按钮出现
+                    this.renderAttachments();  // 附件区同理，要等笔记存过才出现
                     
                     if (!isAutoSave) {
                         this.showMessage('Note saved successfully!', 'success');
@@ -804,6 +938,110 @@
             hideTranslation() {
                 this.translation = null;
                 document.getElementById('translationPanel').style.display = 'none';
+            }
+
+            // ---- Attachments -------------------------------------------------
+
+            async uploadFiles(fileList) {
+                if (!this.currentNote || !this.currentNote.id) return;
+
+                const input = document.getElementById('fileInput');
+                const files = Array.from(fileList || []);
+                if (files.length === 0) return;
+
+                let uploaded = 0;
+                for (const file of files) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    try {
+                        const response = await fetch(
+                            `/api/notes/${this.currentNote.id}/attachments`,
+                            { method: 'POST', body: formData }
+                        );
+                        if (!response.ok) {
+                            const err = await response.json().catch(() => ({}));
+                            throw new Error(err.error || `Upload failed (${response.status})`);
+                        }
+                        const attachment = await response.json();
+                        this.currentNote.attachments = this.currentNote.attachments || [];
+                        this.currentNote.attachments.push(attachment);
+                        uploaded += 1;
+                    } catch (error) {
+                        this.showMessage(`Could not attach "${file.name}": ${error.message}`, 'error');
+                    }
+                }
+
+                input.value = ''; // so the same file can be picked again
+                if (uploaded > 0) {
+                    this.renderAttachments();
+                    this.showMessage(
+                        uploaded === 1 ? 'File attached' : `${uploaded} files attached`,
+                        'success'
+                    );
+                }
+            }
+
+            async deleteAttachment(attachmentId) {
+                if (!this.currentNote) return;
+                if (!confirm('Remove this attachment?')) return;
+
+                try {
+                    const response = await fetch(`/api/attachments/${attachmentId}`, {
+                        method: 'DELETE'
+                    });
+                    if (!response.ok) throw new Error('Failed to remove attachment');
+
+                    this.currentNote.attachments = (this.currentNote.attachments || [])
+                        .filter(a => a.id !== attachmentId);
+                    this.renderAttachments();
+                    this.showMessage('Attachment removed', 'success');
+                } catch (error) {
+                    this.showMessage(`Error removing attachment: ${error.message}`, 'error');
+                }
+            }
+
+            renderAttachments() {
+                const section = document.getElementById('attachmentsSection');
+                const list = document.getElementById('attachmentsList');
+                const note = this.currentNote;
+
+                // Files hang off a saved note, so the section stays hidden until
+                // the note has an id -- same rule as the Delete button.
+                if (!note || !note.id) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+                const items = note.attachments || [];
+
+                if (items.length === 0) {
+                    list.innerHTML = '<div class="attachments-empty">No files attached yet.</div>';
+                    return;
+                }
+
+                list.innerHTML = items.map(a => `
+                    <div class="attachment-item">
+                        ${a.is_image
+                            ? `<a href="${a.url}" target="_blank" rel="noopener"><img class="attachment-thumb" src="${a.url}" alt=""></a>`
+                            : '<span class="attachment-icon">📄</span>'}
+                        <div class="attachment-meta">
+                            <a class="attachment-name" href="${a.url}" target="_blank"
+                               rel="noopener">${this.escapeHtml(a.filename)}</a>
+                            <span class="attachment-size">${this.formatSize(a.size)}</span>
+                        </div>
+                        <button class="attachment-remove" title="Remove attachment"
+                                onclick="noteTaker.deleteAttachment(${a.id})">✕</button>
+                    </div>
+                `).join('');
+            }
+
+            formatSize(bytes) {
+                if (bytes === null || bytes === undefined) return '';
+                if (bytes < 1024) return `${bytes} B`;
+                if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
             }
 
             searchNotes(query) {

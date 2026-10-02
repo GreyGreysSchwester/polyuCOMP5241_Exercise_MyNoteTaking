@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from src.models.note import Note, db
+from src.services import storage
 
 note_bp = Blueprint('note', __name__)
 
@@ -51,9 +52,19 @@ def update_note(note_id):
 
 @note_bp.route('/notes/<int:note_id>', methods=['DELETE'])
 def delete_note(note_id):
-    """Delete a specific note"""
+    """Delete a specific note, together with any files attached to it"""
     try:
         note = Note.query.get_or_404(note_id)
+
+        # Clear the attached objects out of the bucket first. A failure here is
+        # not fatal: the database rows still need to be removed, otherwise the
+        # note would linger in the UI.
+        for attachment in note.attachments:
+            try:
+                storage.delete(attachment.storage_path)
+            except storage.StorageError:
+                pass
+
         db.session.delete(note)
         db.session.commit()
         return '', 204
