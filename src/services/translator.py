@@ -23,7 +23,24 @@ from openai import OpenAI
 
 # .../MyNoteTaking-main   (this file is src/services/translator.py)
 ROOT_DIR = Path(__file__).resolve().parents[2]
-PROMPT_PATH = ROOT_DIR / "prompts" / "translate_prompt.md"
+
+PROMPT_RELATIVE_PATH = Path("prompts") / "translate_prompt.md"
+
+
+def _locate_prompt() -> Path:
+    """Find ``prompts/translate_prompt.md``.
+
+    Walks up from this module instead of assuming a fixed depth, so the same
+    code works in the local repository and inside a serverless bundle, where
+    the function's working directory differs.
+    """
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / PROMPT_RELATIVE_PATH
+        if candidate.is_file():
+            return candidate
+    # Not found anywhere -- return the conventional location so the caller can
+    # report a meaningful path in its error message.
+    return ROOT_DIR / PROMPT_RELATIVE_PATH
 
 load_dotenv(ROOT_DIR / ".env")
 
@@ -57,11 +74,12 @@ class TranslationError(Exception):
     """Raised when the translation service cannot produce a result."""
 
 
-def load_prompt_template(prompt_path: Path = PROMPT_PATH) -> str:
+def load_prompt_template(prompt_path: Path | None = None) -> str:
     """Read the prompt template from disk."""
-    if not prompt_path.exists():
-        raise TranslationError(f"Prompt file not found: {prompt_path}")
-    return prompt_path.read_text(encoding="utf-8")
+    path = prompt_path or _locate_prompt()
+    if not path.is_file():
+        raise TranslationError(f"Prompt file not found: {path}")
+    return path.read_text(encoding="utf-8")
 
 
 def build_prompt(title: str, content: str, target_language: str) -> str:

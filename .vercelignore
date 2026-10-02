@@ -1,0 +1,16 @@
+# Keep the deployment bundle small.
+# Vercel deploys from git, so anything git-ignored is excluded anyway --
+# this also covers the case of deploying from a local checkout with the CLI.
+
+.git/
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+database/
+.env
+.env.*
+!.env.example
+*.log
+.vercel
