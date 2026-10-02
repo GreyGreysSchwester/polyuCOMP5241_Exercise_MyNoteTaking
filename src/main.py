@@ -5,6 +5,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, send_from_directory
 from flask_cors import CORS
+from dotenv import load_dotenv
+from sqlalchemy.pool import NullPool
 from src.models.user import db
 from src.routes.user import user_bp
 from src.routes.note import note_bp
@@ -21,15 +23,49 @@ CORS(app)
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(note_bp, url_prefix='/api')
 app.register_blueprint(translate_bp, url_prefix='/api')
-# configure database to use repository-root `database/app.db`
+# --- Configuration ----------------------------------------------------------
 ROOT_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-DB_PATH = os.path.join(ROOT_DIR, 'database', 'app.db')
-# ensure database directory exists
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{DB_PATH}"
+# Load .env during local development. On a deployment platform (e.g. Vercel)
+# the variables are supplied by the platform and no .env file exists, in which
+# case load_dotenv is a harmless no-op.
+load_dotenv(os.path.join(ROOT_DIR, '.env'))
+
+# --- Database ---------------------------------------------------------------
+# The app is stateless: serverless platforms (Vercel) wipe the local disk
+# between requests, so a SQLite file cannot be relied on. All data lives in an
+# external Postgres database (Supabase) instead.
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+if not DATABASE_URL:
+    raise RuntimeError(
+        'DATABASE_URL is not set. Add it to .env for local development, or to '
+        'the environment variables of your deployment platform.'
+    )
+
+# SQLAlchemy needs the driver named explicitly. Supabase hands out URLs that
+# start with `postgres://` or `postgresql://`.
+for prefix in ('postgres://', 'postgresql://'):
+    if DATABASE_URL.startswith(prefix):
+        DATABASE_URL = 'postgresql+psycopg2://' + DATABASE_URL[len(prefix):]
+        break
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Ping before use and recycle, so connections dropped by the pooler are
+# detected instead of failing the request.
+engine_options = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
+if os.getenv('VERCEL'):
+    # On serverless every invocation is short-lived and the process may be
+    # frozen between requests, so holding pooled connections open is wasteful
+    # and can exhaust the pooler. Vercel sets the VERCEL env var for us.
+    engine_options['poolclass'] = NullPool
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_options
 db.init_app(app)
+
 with app.app_context():
     db.create_all()
 
@@ -51,4 +87,12 @@ def serve(path):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    # Ignore third-party packages: lazily-imported libraries (e.g. openai
+    # pulling in anyio on the first request) write __pycache__ files, which
+    # would otherwise make the auto-reloader restart the server mid-request.
+    app.run(
+        host='0.0.0.0',
+        port=5001,
+        debug=True,
+        exclude_patterns=['*site-packages*', '*AppData*'],
+    )
