@@ -220,6 +220,91 @@
             transform: translateY(-1px);
         }
 
+        /* --- Translation feature --- */
+
+        .btn-translate {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+        }
+
+        .btn-translate:hover:not(:disabled) {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-apply {
+            background: #eef2ff;
+            color: #4338ca;
+            border: 1px solid #c7d2fe;
+        }
+
+        .btn-apply:hover {
+            background: #e0e7ff;
+            transform: translateY(-1px);
+        }
+
+        .lang-select {
+            padding: clamp(9px, 0.6vw, 16px) clamp(10px, 0.8vw, 18px);
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            background: #fff;
+            color: #333;
+            font-family: inherit;
+            font-size: clamp(15px, 0.4vw + 0.8rem, 20px);
+            cursor: pointer;
+            transition: border-color 0.2s ease;
+        }
+
+        .lang-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .translation-panel {
+            margin-top: clamp(14px, 1.2vw, 22px);
+            padding: clamp(14px, 1.2vw, 22px);
+            background: #f8faff;
+            border: 1px solid #dbe4ff;
+            border-left: 4px solid var(--primary);
+            border-radius: 10px;
+        }
+
+        .translation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .translation-label {
+            font-weight: 600;
+            color: #4338ca;
+            font-size: clamp(14px, 0.3vw + 0.75rem, 18px);
+        }
+
+        .translation-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 6px;
+            font-size: clamp(16px, 0.35vw + 0.85rem, 21px);
+        }
+
+        .translation-content {
+            color: #444;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: clamp(15px, 0.4vw + 0.8rem, 20px);
+        }
+
         .form-group {
             margin-bottom: clamp(14px, 1.2vw, 22px);
         }
@@ -383,6 +468,17 @@
                 <div class="editor-header">
                     <h2 class="editor-title" id="editorTitle">Select a note to edit</h2>
                     <div class="editor-actions" id="editorActions" style="display: none;">
+                        <select class="lang-select" id="langSelect" title="Translate into..." aria-label="Translation target language">
+                            <option value="Chinese">中文</option>
+                            <option value="English" selected>English</option>
+                            <option value="Japanese">日本語</option>
+                            <option value="Korean">한국어</option>
+                            <option value="French">Français</option>
+                            <option value="German">Deutsch</option>
+                            <option value="Spanish">Español</option>
+                            <option value="Russian">Русский</option>
+                        </select>
+                        <button class="btn btn-translate" id="translateBtn">🌐 Translate</button>
                         <button class="btn btn-save" id="saveBtn">💾 Save</button>
                         <button class="btn btn-delete" id="deleteBtn">🗑️ Delete</button>
                     </div>
@@ -402,6 +498,16 @@
                     </div>
                 </div>
 
+                <!-- 译文区：点 Translate 之后才出现，原文保留在正文框里 -->
+                <div class="translation-panel" id="translationPanel" style="display: none;">
+                    <div class="translation-header">
+                        <span class="translation-label" id="translationLabel">🌐 Translation</span>
+                        <button class="btn btn-apply" id="applyTranslationBtn">↩ Replace content</button>
+                    </div>
+                    <div class="translation-title" id="translationTitle"></div>
+                    <div class="translation-content" id="translationContent"></div>
+                </div>
+
                 <div class="empty-state" id="emptyState">
                     <h3>Welcome to NoteTaker!</h3>
                     <p>Select an existing note or create a new one to get started.</p>
@@ -415,6 +521,7 @@
             constructor() {
                 this.notes = [];
                 this.currentNote = null;
+                this.translation = null;
                 this.isLoading = false;
                 this.init();
             }
@@ -428,6 +535,8 @@
                 document.getElementById('newNoteBtn').addEventListener('click', () => this.createNewNote());
                 document.getElementById('saveBtn').addEventListener('click', () => this.saveNote());
                 document.getElementById('deleteBtn').addEventListener('click', () => this.deleteNote());
+                document.getElementById('translateBtn').addEventListener('click', () => this.translateNote());
+                document.getElementById('applyTranslationBtn').addEventListener('click', () => this.applyTranslation());
                 document.getElementById('searchBox').addEventListener('input', (e) => this.searchNotes(e.target.value));
                 
                 // Auto-save on content change (debounced)
@@ -487,6 +596,7 @@
 
                 this.currentNote = note;
                 this.showEditor();
+                this.hideTranslation();
                 this.renderNotesList(); // Re-render to update active state
                 
                 document.getElementById('noteTitle').value = note.title || '';
@@ -504,6 +614,7 @@
                 };
                 
                 this.showEditor();
+                this.hideTranslation();
                 document.getElementById('noteTitle').value = '';
                 document.getElementById('noteContent').value = '';
                 document.getElementById('editorTitle').textContent = 'New Note';
@@ -534,6 +645,7 @@
                 document.getElementById('editorForm').style.display = 'none';
                 document.getElementById('editorActions').style.display = 'none';
                 document.getElementById('editorTitle').textContent = 'Select a note to edit';
+                this.hideTranslation();
                 this.currentNote = null;
             }
 
@@ -618,6 +730,80 @@
                 } catch (error) {
                     this.showMessage(`Error deleting note: ${error.message}`, 'error');
                 }
+            }
+
+            async translateNote() {
+                if (!this.currentNote) return;
+
+                const title = document.getElementById('noteTitle').value.trim();
+                const content = document.getElementById('noteContent').value.trim();
+
+                if (!title && !content) {
+                    this.showMessage('Please write something before translating', 'error');
+                    return;
+                }
+
+                const targetLanguage = document.getElementById('langSelect').value;
+                const translateBtn = document.getElementById('translateBtn');
+                translateBtn.disabled = true;
+                translateBtn.textContent = '⏳ Translating...';
+                this.showMessage(`Translating into ${targetLanguage}...`, 'loading');
+
+                try {
+                    const response = await fetch('/api/translate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title, content, target_language: targetLanguage })
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json().catch(() => ({}));
+                        throw new Error(err.error || `Request failed (${response.status})`);
+                    }
+
+                    this.translation = await response.json();
+                    this.renderTranslation();
+                    this.hideMessage();
+                    this.showMessage('Translation ready', 'success');
+                } catch (error) {
+                    this.showMessage(`Error translating: ${error.message}`, 'error');
+                } finally {
+                    translateBtn.disabled = false;
+                    translateBtn.textContent = '🌐 Translate';
+                }
+            }
+
+            renderTranslation() {
+                const panel = document.getElementById('translationPanel');
+                if (!this.translation) {
+                    panel.style.display = 'none';
+                    return;
+                }
+
+                const source = this.translation.detected_source_language;
+                const target = this.translation.target_language;
+                document.getElementById('translationLabel').textContent =
+                    source ? `🌐 ${source} → ${target}` : `🌐 Translation (${target})`;
+                document.getElementById('translationTitle').textContent =
+                    this.translation.translated_title || '';
+                document.getElementById('translationContent').textContent =
+                    this.translation.translated_content || '';
+                panel.style.display = 'block';
+            }
+
+            // 把译文写回正文框；原文保留到你自己按 Save 为止
+            applyTranslation() {
+                if (!this.translation) return;
+
+                document.getElementById('noteTitle').value = this.translation.translated_title || '';
+                document.getElementById('noteContent').value = this.translation.translated_content || '';
+                this.hideTranslation();
+                this.showMessage('Translation applied - press Save to keep it', 'success');
+            }
+
+            hideTranslation() {
+                this.translation = null;
+                document.getElementById('translationPanel').style.display = 'none';
             }
 
             searchNotes(query) {
