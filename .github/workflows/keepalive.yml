@@ -1,0 +1,45 @@
+name: Keep-alive
+
+# Supabase's free tier pauses a project after 7 days without database activity.
+# Pinging an endpoint that touches the database every day keeps it awake, and
+# doubles as a daily uptime check for the deployment.
+
+on:
+  schedule:
+    # 03:17 UTC = 11:17 Hong Kong time. Deliberately off the hour to avoid the
+    # top-of-the-hour rush that GitHub Actions queues experience.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+env:
+  # Override this without editing the file:
+  #   Settings -> Secrets and variables -> Actions -> Variables -> SITE_URL
+  SITE_URL: ${{ vars.SITE_URL || 'https://REPLACE-WITH-YOUR-SITE.vercel.app' }}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the API (touches the database)
+        run: |
+          case "$SITE_URL" in
+            *REPLACE-WITH-YOUR-SITE*)
+              echo "SITE_URL is still the placeholder -- skipping."
+              echo "Set it under Settings -> Secrets and variables -> Actions -> Variables."
+              exit 0
+              ;;
+          esac
+
+          echo "Pinging $SITE_URL/api/notes"
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 45 "$SITE_URL/api/notes" || true)
+            echo "Attempt $attempt -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "Site is healthy."
+              exit 0
+            fi
+            sleep 20
+          done
+
+          echo "::error::Site did not return HTTP 200 after 3 attempts."
+          exit 1
